@@ -1,0 +1,18 @@
+//
+// Created by kotik on 3/3/23.
+//
+
+#ifndef THECUBE_ERROR_CODES_H
+#define THECUBE_ERROR_CODES_H
+
+enum {
+    NO_ERROR,
+    PROGRAM_INIT_ERROR,
+    DMA_REQUEST_ERROR,
+    SD_MOUNT_ERROR,
+    SD_FILE_NOT_FOUND_ERROR,
+    SD_OPEN_ERROR,
+    SD_READ_ERROR
+};
+
+#endif //THECUBE_ERROR_CODES_H
