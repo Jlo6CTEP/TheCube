@@ -3,6 +3,9 @@
 // Created by ysuho on 04-Mar-23.
 //
 
+static TIMER_CNT_WIDTH *buffer_ptr;
+static Program prog = {0};
+
 /**
  * @note This function is supposed to be called only once to prevent frequent memory allocations and de-allocations
  * It won't break if called multiple times, though. Just beware of heap fragmentation and the fact that it will destroy previous program
@@ -16,7 +19,7 @@
  * @return
  */
 Program *init_program(TIM_HandleTypeDef * timer, uint32_t channel, DMA_HandleTypeDef dma_handle, uint16_t led_count,
-                     uint16_t program_length, uint8_t bits_per_led, uint8_t desired_fps, uint8_t * is_error, Shifter * hue_shifter) {
+                      uint16_t program_length, uint8_t bits_per_led, uint8_t desired_fps, uint8_t * is_error, ColorProcessor * hue_shifter) {
     uint8_t safe_is_error = 0;
     if (is_error == NULL) {
         is_error = &safe_is_error;
@@ -73,7 +76,7 @@ Program *init_program(TIM_HandleTypeDef * timer, uint32_t channel, DMA_HandleTyp
     return &prog;
 }
 
-static uint8_t safe_add(int16_t a, int16_t b)
+uint8_t safe_add(int16_t a, int16_t b)
 {
     if (a >= 0) {
         if (b > (UINT8_MAX - a)) {
@@ -87,7 +90,7 @@ static uint8_t safe_add(int16_t a, int16_t b)
     return a + b;
 }
 
-static uint8_t send_leds_to_dma(LED *leds) {
+uint8_t send_leds_to_dma(LED *leds) {
     buffer_ptr = prog.buffer;
 
     while (prog.dma_handle.State != HAL_DMA_STATE_READY) {}
@@ -132,7 +135,7 @@ uint8_t blast_one_frame(uint16_t frame) {
         // on the first iteration, both this and next buffers should be generated
         // they are needed for interpolation
         for (uint32_t led=0; led < prog.led_count; led++){
-            shift_hue(&prog.frames[frame].leds[led], &prog.this_hue_shift_buffer[led]);
+            process((uint8_t*)&prog.frames[frame].leds[led], (uint8_t*)&prog.this_hue_shift_buffer[led]);
         }
     } else {
         // when the iteration advances, next becomes this
@@ -142,7 +145,7 @@ uint8_t blast_one_frame(uint16_t frame) {
 
     if (frame + 1 != prog.program_len) {
         for (uint32_t led = 0; led < prog.led_count; led++) {
-            shift_hue(&prog.frames[frame + 1].leds[led], &prog.next_hue_shift_buffer[led]);
+            process((uint8_t*)&prog.frames[frame + 1].leds[led], (uint8_t*)&prog.next_hue_shift_buffer[led]);
         }
     }
 

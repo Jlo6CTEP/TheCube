@@ -20,24 +20,36 @@
 #include "main.h"
 #include "fatfs.h"
 #include "usb_device.h"
-//#include "led_blaster.h"
-
-#define BITS_PER_LED 24
-#define FILE_EXTENSION "bin"
-#define SUFFIX "." FILE_EXTENSION
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "main.h"
+#include "fatfs.h"
+#include "usb_device.h"
+#include "led_blaster.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+typedef struct {
+    char programs[40][64];
+    uint8_t current_program;
+    uint8_t program_count;
+} ProgramList;
+
+typedef struct {
+    uint32_t prog_len;
+    uint32_t led_count;
+    uint8_t desired_fps;
+}__attribute__((packed)) ProgramParameters;
 
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define BITS_PER_LED 24
+#define FILE_EXTENSION "bin"
+#define SUFFIX "." FILE_EXTENSION
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -55,12 +67,21 @@ TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
 DMA_HandleTypeDef hdma_tim4_ch1;
+
+/* USER CODE BEGIN PV */
+SD_HandleTypeDef hsd;
+
+SPI_HandleTypeDef hspi3;
+
+TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim4;
+DMA_HandleTypeDef hdma_tim4_ch1;
 FATFS fs;
 DIR dir;
 FIL fil;
 uint8_t incr = 0;
-/* USER CODE BEGIN PV */
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -82,93 +103,66 @@ static void MX_TIM2_Init(void);
 
 static void MX_TIM3_Init(void);
 
-typedef struct {
-    char programs[40][64];
-    uint8_t current_program;
-    uint8_t program_count;
-} ProgramList;
+/* USER CODE BEGIN PFP */
+uint8_t endswith(const char *str, const char *suffix);
 
-typedef struct {
-    uint32_t prog_len;
-    uint32_t led_count;
-    uint8_t desired_fps;
-}__attribute__((packed)) ProgramParameters;
+uint8_t load_prog(Program *program, char *filename);
+/* USER CODE END PFP */
 
-uint8_t endswith(const char *str, const char *suffix) {
-    if (!str || !suffix)
-        return 0;
-    size_t str_len = strlen(str);
-    size_t suffix_len = strlen(suffix);
-    if (suffix_len > str_len)
-        return 0;
-    return strncmp(str + str_len - suffix_len, suffix, suffix_len) == 0;
-}
-/*
-uint8_t load_prog(Program * program, char *filename) {
-    incr++;
-    uint8_t fresult = 1;
-    fresult = f_open(&fil, filename, FA_OPEN_ALWAYS | FA_READ);
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
 
-    if (fresult != FR_OK) {
-        return  SD_READ_ERROR;
-    }
-
-    unsigned int size_read = 0;
-    ProgramParameters prog_param = {0};
-    f_read(&fil, &prog_param, sizeof(ProgramParameters), &size_read);
-
-    for (uint32_t i = 0; i < prog_param.prog_len; i++) {
-        f_read(&fil, program->frames[i].leds, program->led_count * sizeof(LED), &size_read);
-        if (size_read != program->led_count * sizeof(LED)) {
-            f_close(&fil);
-            return SD_READ_ERROR;
-        }
-        f_read(&fil, &program->frames[i].is_interpolated, 2 * sizeof(uint8_t), &size_read);
-        if (size_read != 2 * sizeof(uint8_t)) {
-            f_close(&fil);
-            return SD_READ_ERROR;
-        }
-    }
-    incr++;
-    program->program_len = prog_param.prog_len;
-    program->desired_fps = prog_param.desired_fps;
-    f_close(&fil);
-    return NO_ERROR;
-}
-*/
+/* USER CODE END 0 */
 
 /**
   * @brief  The application entry point.
   * @retval int
   */
-
 int main(void) {
+    /* USER CODE BEGIN 1 */
 
+    /* USER CODE END 1 */
+
+    /* MCU Configuration--------------------------------------------------------*/
+
+    /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
     HAL_Init();
+
+    /* USER CODE BEGIN Init */
+
+    /* USER CODE END Init */
+
+    /* Configure the system clock */
     SystemClock_Config();
+
+    /* USER CODE BEGIN SysInit */
+
+    /* USER CODE END SysInit */
+
+    /* Initialize all configured peripherals */
     MX_GPIO_Init();
-    //MX_DMA_Init();
+    MX_DMA_Init();
     MX_SDIO_SD_Init();
     MX_SPI3_Init();
     MX_FATFS_Init();
-    //MX_USB_DEVICE_Init();
-    //MX_TIM1_Init();
-    //MX_TIM4_Init();
-    //MX_TIM2_Init();
-    //MX_TIM3_Init();
+    MX_USB_DEVICE_Init();
+    MX_TIM1_Init();
+    MX_TIM4_Init();
+    MX_TIM2_Init();
+    MX_TIM3_Init();
+    /* USER CODE BEGIN 2 */
+    ProgramList prog_list = {0};
 
-    //ProgramList prog_list = {0};
-
-    //HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
-    //HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
-    //HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
+    HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
+    HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
+    HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL);
 
 
     uint8_t fresult = f_mount(&fs, "/", 1);
     if (fresult != FR_OK) {
         Error_Handler();
     }
-    /*
+
     FILINFO file_info;
 
     fresult = f_opendir(&dir, "");
@@ -194,10 +188,10 @@ int main(void) {
         Error_Handler();
     }
     f_closedir(&dir);
-    */
 
-    //prog_list.current_program = 0;
-    fresult = f_open(&fil, "sequence.bin", FA_OPEN_ALWAYS | FA_READ);
+    prog_list.current_program = 0;
+    char *current_prog = prog_list.programs[prog_list.current_program];
+    fresult = f_open(&fil, current_prog, FA_OPEN_ALWAYS | FA_READ);
     if (fresult != FR_OK) {
         Error_Handler();
     }
@@ -209,57 +203,20 @@ int main(void) {
     }
     f_close(&fil);
 
-    HAL_Delay(5000);
-
-    fresult = f_open(&fil, "sequence.bin", FA_OPEN_ALWAYS | FA_READ);
-    if (fresult != FR_OK) {
-        Error_Handler();
-    }
-    ProgramParameters prog_param2 = {0};
-    f_read(&fil, &prog_param2, sizeof(ProgramParameters), &size_read);
-    if (size_read != sizeof(ProgramParameters)) {
-        Error_Handler();
-    }
-    f_close(&fil);
-    while (1){}
-    /*
-    size_read = 0;
-    ProgramParameters prog_param2 = {0};
-    f_read(&fil, &prog_param2, sizeof(ProgramParameters), &size_read);
-    f_close(&fil);
-    if (size_read != sizeof(ProgramParameters)){
-        Error_Handler();
-    }
-
-
-    Shifter *shifter = init_shifter(&htim2);
+    ColorProcessor *processor = init_processor(&htim2.Instance->CNT, &htim1.Instance->CNT);
     Program *program = init_program(
             &htim4, TIM_CHANNEL_1, hdma_tim4_ch1, prog_param.led_count,
-            100, BITS_PER_LED, prog_param.desired_fps * 2, &fresult, shifter);
-
-    uint8_t res = load_prog(program, prog_list.programs[0]);
-    if (res != NO_ERROR) {
-        Error_Handler();
-    }
-
-    HAL_Delay(5000);
-
-    res = load_prog(program, prog_list.programs[0]);
-    if (res != NO_ERROR) {
-        Error_Handler();
-    }
-
-    res = load_prog(program, prog_list.programs[1]);
-    if (res != NO_ERROR) {
-        Error_Handler();
-    }
-
+            100, BITS_PER_LED, prog_param.desired_fps * 2, &fresult, processor);
 
     uint16_t frame = 0;
+    load_prog(program, current_prog);
+    /* USER CODE END 2 */
 
+    /* Infinite loop */
+    /* USER CODE BEGIN WHILE */
     while (1) {
-        if ((htim3.Instance->CNT >> 2) % prog_list.program_count != prog_list.current_program) {
-            prog_list.current_program = htim3.Instance->CNT % prog_list.program_count;
+        if ((htim3.Instance->CNT) % prog_list.program_count != prog_list.current_program) {
+            prog_list.current_program = (htim3.Instance->CNT) % prog_list.program_count;
             fresult = load_prog(program, prog_list.programs[prog_list.current_program]);
             if (fresult != NO_ERROR) {
                 Error_Handler();
@@ -268,12 +225,12 @@ int main(void) {
         }
         blast_one_frame(frame);
         frame = (frame + 1) % program->program_len;
+        /* USER CODE END WHILE */
+
+        /* USER CODE BEGIN 3 */
     }
-    */
+    /* USER CODE END 3 */
 }
-
-
-
 
 /**
   * @brief System Clock Configuration
@@ -337,7 +294,7 @@ static void MX_SDIO_SD_Init(void) {
     hsd.Init.ClockPowerSave = SDIO_CLOCK_POWER_SAVE_DISABLE;
     hsd.Init.BusWide = SDIO_BUS_WIDE_1B;
     hsd.Init.HardwareFlowControl = SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
-    hsd.Init.ClockDiv = 0;
+    hsd.Init.ClockDiv = 32;
     /* USER CODE BEGIN SDIO_Init 2 */
 
     /* USER CODE END SDIO_Init 2 */
@@ -400,7 +357,7 @@ static void MX_TIM1_Init(void) {
     htim1.Instance = TIM1;
     htim1.Init.Prescaler = 0;
     htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-    htim1.Init.Period = 40;
+    htim1.Init.Period = 255;
     htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
     htim1.Init.RepetitionCounter = 0;
     htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -491,9 +448,9 @@ static void MX_TIM3_Init(void) {
 
     /* USER CODE END TIM3_Init 1 */
     htim3.Instance = TIM3;
-    htim3.Init.Prescaler = 0;
+    htim3.Init.Prescaler = 4;
     htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-    htim3.Init.Period = 40;
+    htim3.Init.Period = 255;
     htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
     htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
     sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
@@ -618,7 +575,45 @@ static void MX_GPIO_Init(void) {
 }
 
 /* USER CODE BEGIN 4 */
+uint8_t endswith(const char *str, const char *suffix) {
+    if (!str || !suffix)
+        return 0;
+    size_t str_len = strlen(str);
+    size_t suffix_len = strlen(suffix);
+    if (suffix_len > str_len)
+        return 0;
+    return strncmp(str + str_len - suffix_len, suffix, suffix_len) == 0;
+}
 
+uint8_t load_prog(Program *program, char *filename) {
+    uint8_t fresult;
+    fresult = f_open(&fil, filename, FA_OPEN_ALWAYS | FA_READ);
+
+    if (fresult != FR_OK) {
+        return SD_READ_ERROR;
+    }
+
+    unsigned int size_read = 0;
+    ProgramParameters prog_param = {0};
+    f_read(&fil, &prog_param, sizeof(ProgramParameters), &size_read);
+
+    for (uint32_t i = 0; i < prog_param.prog_len; i++) {
+        f_read(&fil, program->frames[i].leds, program->led_count * sizeof(LED), &size_read);
+        if (size_read != program->led_count * sizeof(LED)) {
+            f_close(&fil);
+            return SD_READ_ERROR;
+        }
+        f_read(&fil, &program->frames[i].is_interpolated, 2 * sizeof(uint8_t), &size_read);
+        if (size_read != 2 * sizeof(uint8_t)) {
+            f_close(&fil);
+            return SD_READ_ERROR;
+        }
+    }
+    program->program_len = prog_param.prog_len;
+    program->desired_fps = prog_param.desired_fps;
+    f_close(&fil);
+    return NO_ERROR;
+}
 /* USER CODE END 4 */
 
 /**

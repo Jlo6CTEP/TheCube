@@ -11,7 +11,7 @@
 #include "stm32f4xx.h"
 #include "error_codes.h"
 #include "leds.h"
-#include "hue_shifter.h"
+#include "color_processing.h"
 
 #define TIMER_CNT_WIDTH uint16_t
 #define MAX_ALLOCATABLE_MEMORY (128*1024)
@@ -35,12 +35,9 @@ typedef struct {
     LED *interpolation_buffer;
     LED *this_hue_shift_buffer;
     LED *next_hue_shift_buffer;
-    Shifter *hue_shifter;
+    ColorProcessor *hue_shifter;
     uint8_t desired_fps;
 } Program;
-
-static TIMER_CNT_WIDTH *buffer_ptr;
-static Program prog = {0};
 
 /**
  * @note This function is supposed to be called only once to prevent frequent memory allocations and de-allocations
@@ -56,11 +53,11 @@ static Program prog = {0};
  * @return initialized program struct
  */
 Program *init_program(TIM_HandleTypeDef *timer, uint32_t channel, DMA_HandleTypeDef dma_handle, uint16_t led_count,
-                      uint16_t program_length, uint8_t bits_per_led, uint8_t desired_fps, uint8_t * is_error, Shifter * hue_shifter);
+                      uint16_t program_length, uint8_t bits_per_led, uint8_t desired_fps, uint8_t * is_error, ColorProcessor * hue_shifter);
 
-static uint8_t safe_add(int16_t a, int16_t b);
+uint8_t safe_add(int16_t a, int16_t b);
 
-static uint8_t send_leds_to_dma(LED *leds);
+uint8_t send_leds_to_dma(LED *leds);
 
 uint8_t blast();
 uint8_t blast_one_frame(uint16_t frame);
