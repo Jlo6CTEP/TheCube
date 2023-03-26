@@ -43,20 +43,42 @@ ColorProcessor * init_processor(volatile uint32_t *hue_source, volatile uint32_t
 }
 
 void process(const uint8_t src_led[3], const uint8_t tgt_led[3]) {
-    uint8_t brightness = (uint8_t)*processor.brightness_source;
-    uint8_t red = ((LED*)src_led)->red;
-    uint8_t green = ((LED*)src_led)->green;
-    uint8_t blue = ((LED*)src_led)->blue;
-    ((LED*)tgt_led)->red = clip((
-            processor.matrix[0][0] * red +
-            processor.matrix[0][1] * green +
-            processor.matrix[0][0] * blue) * ((float32_t)brightness / MAX_BRIGHTNESS));
-    ((LED*)tgt_led)->green = clip((
-            processor.matrix[1][0] * red +
-            processor.matrix[1][1] * green +
-            processor.matrix[1][0] * blue) * ((float32_t)brightness / MAX_BRIGHTNESS));
-    ((LED*)tgt_led)->blue = clip((
-            processor.matrix[2][0] * red +
-            processor.matrix[2][1] * green +
-            processor.matrix[2][0] * blue) * ((float32_t)brightness / MAX_BRIGHTNESS));
+
+    uint8_t brightness = 0;
+    // Very big overflow, probably rollover from 0 to timer max, clamp to 0
+    uint32_t brightness_shadow = *processor.brightness_source >> 2;
+    if (brightness_shadow > UINT8_MAX * 2) {
+        *processor.brightness_source = 0;
+        brightness = 0;
+    } else if (brightness_shadow > UINT8_MAX) {
+        // overflow, so clamp to max UINT8
+        *processor.brightness_source = UINT8_MAX << 2;
+        brightness = UINT8_MAX;
+    } else {
+        brightness = brightness_shadow;
+    }
+    uint8_t temp_red = ((LED*)src_led)->red;
+    uint8_t temp_green = ((LED*)src_led)->green;
+    uint8_t temp_blue = ((LED*)src_led)->blue;
+    float32_t red = (
+            processor.matrix[0][0] * temp_red +
+            processor.matrix[0][1] * temp_green +
+            processor.matrix[0][0] * temp_blue);
+    float32_t green = (
+            processor.matrix[1][0] * temp_red +
+            processor.matrix[1][1] * temp_green +
+            processor.matrix[1][0] * temp_blue);
+    float32_t blue = (
+            processor.matrix[2][0] * temp_red +
+            processor.matrix[2][1] * temp_green +
+            processor.matrix[2][0] * temp_blue);
+
+    uint8_t red_scaled = clip(red * ((float32_t)brightness / MAX_BRIGHTNESS));
+    uint8_t green_scaled = clip(green * ((float32_t)brightness / MAX_BRIGHTNESS));
+    uint8_t blue_scaled = clip(blue * ((float32_t)brightness / MAX_BRIGHTNESS));
+
+    ((LED*)tgt_led)->red = (red != 0 && red_scaled == 0 && brightness != 0) ? 1 : red_scaled;
+    ((LED*)tgt_led)->green = (green != 0 && green_scaled == 0 && brightness != 0) ? 1 : green_scaled;
+    ((LED*)tgt_led)->blue = (blue != 0 && blue_scaled == 0 && brightness != 0) ? 1 : blue_scaled;
+
 }

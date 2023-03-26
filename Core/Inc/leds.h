@@ -17,5 +17,6 @@ typedef struct {
     LED *leds;
     uint8_t is_interpolated;
     uint8_t interpolation_steps;
+    uint16_t time;
 } Frame;
 #endif //THECUBE_LEDS_H

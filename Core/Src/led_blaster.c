@@ -19,7 +19,7 @@ static Program prog = {0};
  * @return
  */
 Program *init_program(TIM_HandleTypeDef * timer, uint32_t channel, DMA_HandleTypeDef dma_handle, uint16_t led_count,
-                      uint16_t program_length, uint8_t bits_per_led, uint8_t desired_fps, uint8_t * is_error, ColorProcessor * hue_shifter) {
+                      uint16_t program_length, uint8_t bits_per_led, uint8_t * is_error, ColorProcessor * hue_shifter) {
     uint8_t safe_is_error = 0;
     if (is_error == NULL) {
         is_error = &safe_is_error;
@@ -34,7 +34,6 @@ Program *init_program(TIM_HandleTypeDef * timer, uint32_t channel, DMA_HandleTyp
     prog.timer_chanel = channel;
     prog.program_len = program_length;
     prog.led_count = led_count;
-    prog.desired_fps = desired_fps;
     prog.dma_handle = dma_handle;
 
     // handle the repeated call case
@@ -42,8 +41,8 @@ Program *init_program(TIM_HandleTypeDef * timer, uint32_t channel, DMA_HandleTyp
     prog.buffer = realloc(prog.buffer, prog.dma_buffer_len);
     prog.shadow_buffer = realloc(prog.shadow_buffer, prog.dma_buffer_len);
     prog.interpolation_buffer = realloc(prog.interpolation_buffer, led_count * sizeof(LED));
-    prog.this_hue_shift_buffer = realloc(prog.interpolation_buffer, led_count * sizeof(LED));
-    prog.next_hue_shift_buffer = realloc(prog.interpolation_buffer, led_count * sizeof(LED));
+    prog.this_hue_shift_buffer = realloc(prog.this_hue_shift_buffer, led_count * sizeof(LED));
+    prog.next_hue_shift_buffer = realloc(prog.next_hue_shift_buffer, led_count * sizeof(LED));
     prog.hue_shifter = hue_shifter;
 
     if (prog.buffer == NULL || prog.shadow_buffer == NULL || prog.interpolation_buffer == NULL) {
@@ -93,7 +92,7 @@ uint8_t safe_add(int16_t a, int16_t b)
 uint8_t send_leds_to_dma(LED *leds) {
     buffer_ptr = prog.buffer;
 
-    while (prog.dma_handle.State != HAL_DMA_STATE_READY) {}
+    while (prog.dma_handle.State == HAL_DMA_STATE_BUSY) {}
 
     for (uint32_t led_value = 0; led_value < prog.led_count; led_value++) {
         LED value = leds[led_value];
@@ -116,7 +115,7 @@ uint8_t send_leds_to_dma(LED *leds) {
             prog.timer,
             prog.timer_chanel,
             (uint32_t *) prog.buffer,
-            prog.dma_buffer_len / 2
+            prog.dma_buffer_len / sizeof(uint16_t)
     );
     if (result == HAL_ERROR) {
         return result;
@@ -130,7 +129,7 @@ uint8_t send_leds_to_dma(LED *leds) {
 
 uint8_t blast_one_frame(uint16_t frame) {
     calculate_matrix();
-
+    uint32_t time_elapsed = HAL_GetTick();
     if (frame == 0) {
         // on the first iteration, both this and next buffers should be generated
         // they are needed for interpolation
@@ -140,7 +139,9 @@ uint8_t blast_one_frame(uint16_t frame) {
     } else {
         // when the iteration advances, next becomes this
         // and next should be generated
+        LED *temp = prog.this_hue_shift_buffer;
         prog.this_hue_shift_buffer = prog.next_hue_shift_buffer;
+        prog.next_hue_shift_buffer = temp;
     }
 
     if (frame + 1 != prog.program_len) {
@@ -155,12 +156,13 @@ uint8_t blast_one_frame(uint16_t frame) {
         if (result != NO_ERROR) {
             return result;
         }
-        HAL_Delay(1000 / (prog.desired_fps));
+        HAL_Delay(prog.frames[frame].time - (HAL_GetTick() - time_elapsed));
     } else {
         // here we will calculate interpolation on the fly
         // and send em to the DMA
         uint16_t interpolation_steps = prog.frames[frame].interpolation_steps;
         for (uint16_t step = 0; step < interpolation_steps; step++) {
+            time_elapsed = HAL_GetTick();
             for (uint16_t led_value = 0; led_value < prog.led_count; led_value++) {
                 LED *this = prog.this_hue_shift_buffer;
                 LED *next = prog.next_hue_shift_buffer;
@@ -179,7 +181,7 @@ uint8_t blast_one_frame(uint16_t frame) {
                         this[led_value].blue,
                         (float) blue_diff * step / interpolation_steps);
             }
-            HAL_Delay(1000. / (prog.desired_fps * interpolation_steps));
+            HAL_Delay(prog.frames[frame].time/prog.frames[frame].interpolation_steps - (HAL_GetTick() - time_elapsed));
             uint8_t result = send_leds_to_dma(
                     prog.interpolation_buffer);
             if (result != NO_ERROR) {

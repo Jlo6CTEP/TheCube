@@ -36,7 +36,6 @@ typedef struct {
     LED *this_hue_shift_buffer;
     LED *next_hue_shift_buffer;
     ColorProcessor *hue_shifter;
-    uint8_t desired_fps;
 } Program;
 
 /**
@@ -53,7 +52,7 @@ typedef struct {
  * @return initialized program struct
  */
 Program *init_program(TIM_HandleTypeDef *timer, uint32_t channel, DMA_HandleTypeDef dma_handle, uint16_t led_count,
-                      uint16_t program_length, uint8_t bits_per_led, uint8_t desired_fps, uint8_t * is_error, ColorProcessor * hue_shifter);
+                      uint16_t program_length, uint8_t bits_per_led, uint8_t * is_error, ColorProcessor * hue_shifter);
 
 uint8_t safe_add(int16_t a, int16_t b);
 
