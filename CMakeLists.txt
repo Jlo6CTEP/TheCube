@@ -55,7 +55,7 @@ add_definitions(-DDEBUG -DUSE_HAL_DRIVER -DSTM32F407xx)
 
 file(GLOB_RECURSE SOURCES "Core/*.*" "CMSIS/*.*" "FATFS/*.*" "Middlewares/*.*" "Drivers/*.*" "USB_DEVICE/*.*")
 
-set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/STM32F407VETX_FLASH.ld)
+set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/STM32F407VETX_FLASH.ld Core/Inc/config.h)
 
 find_library(CMSIS_LIB libarm_cortexM4lf_math.a Middlewares/Third_Party/ARM_CMSIS/CMSIS/Lib/GCC/)
 

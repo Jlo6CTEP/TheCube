@@ -25,6 +25,7 @@
 /* USER CODE BEGIN Includes */
 #include <stdbool.h>
 #include "led_blaster.h"
+#include "config.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,10 +51,6 @@ typedef struct {
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define BITS_PER_LED 24
-#define FILE_EXTENSION "bin"
-#define SUFFIX "." FILE_EXTENSION
-#define DEBOUNCE_MS 10
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -212,11 +209,8 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-    uint32_t min_dac = 993;
-    uint32_t max_dac = 1054;
-    uint32_t current_dac = min_dac;
+
     HAL_DAC_Start(&hdac, DAC_CHANNEL_2);
-    HAL_DAC_SetValue(&hdac, DAC1_CHANNEL_2, DAC_ALIGN_12B_R, max_dac);
     /* Infinite loop */
     /* USER CODE BEGIN WHILE */
     while (1) {
@@ -226,6 +220,14 @@ int main(void)
             HAL_Delay(10);
             send_leds_to_dma(program->interpolation_buffer);
             while (status == SLEEPING) { HAL_Delay(10);}
+        }
+
+        if (htim1.Instance->CNT < BRIGHTNESS_THRESHOLD) {
+            float32_t brightness =
+                    ((float32_t) BRIGHTNESS_THRESHOLD - htim1.Instance->CNT) / BRIGHTNESS_THRESHOLD * MAX_DAC;
+            HAL_DAC_SetValue(&hdac, DAC1_CHANNEL_2, DAC_ALIGN_12B_R, brightness);
+        } else {
+            HAL_DAC_SetValue(&hdac, DAC1_CHANNEL_2, DAC_ALIGN_12B_R, 0);
         }
 
         if ((htim3.Instance->CNT >> 2) % prog_list.program_count != prog_list.current_program) {

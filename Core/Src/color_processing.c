@@ -3,6 +3,8 @@
 //
 
 #include "color_processing.h"
+#include "config.h"
+
 static ColorProcessor processor = {0};
 
 uint8_t clip(int16_t d) {
@@ -57,6 +59,14 @@ void process(const uint8_t src_led[3], const uint8_t tgt_led[3]) {
     } else {
         brightness = brightness_shadow;
     }
+
+    // Below BRIGHTNESS_THRESHOLD voltage-regulator kicks in to ensure smooth "framerate" at low brightness
+    // At the lowest voltage we want to have quite high PWM brightness and gradually decrease it to
+    // BRIGHTNESS_THRESHOLD to ensure seamless mode transition
+    if (brightness < BRIGHTNESS_THRESHOLD) {
+        brightness = ((BRIGHTNESS_THRESHOLD - brightness) / BRIGHTNESS_THRESHOLD * UINT8_MAX) + BRIGHTNESS_THRESHOLD;
+    }
+
     uint8_t temp_red = ((LED*)src_led)->red;
     uint8_t temp_green = ((LED*)src_led)->green;
     uint8_t temp_blue = ((LED*)src_led)->blue;
